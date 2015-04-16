@@ -1,5 +1,6 @@
 var jsface            = require('jsface'),
 	requestLib        = require('request'),
+	requestLibNtlm    = require('request-ntlm'),
 	Queue             = require('../utilities/Queue'),
 	Helpers           = require('../utilities/Helpers'),
 	HelperProcessor   = require('../utilities/HelperProcessor'),
@@ -170,7 +171,8 @@ var RequestRunner = jsface.Class([Queue, EventEmitter], {
             if (this.secureProtocol) {
                 RequestOptions.secureProtocol = this.secureProtocol;
             }
-            var unireq = requestLib(RequestOptions, function(error, response, body) {
+
+			var dealWithResponse = function(error, response, body) {
                 if(response) {
                     // save some stats, only if response exists
                     this._appendStatsToReponse(request, response);
@@ -189,7 +191,19 @@ var RequestRunner = jsface.Class([Queue, EventEmitter], {
 					delay = 0;
 				}
 				this.emit('requestExecuted', error, response, body, request, delay);
-			}.bind(this));
+			}
+
+			if(Globals.envJson.values.length && _und.findWhere(Globals.envJson.values, {key:'NTLM_USERNAME'}))
+			{
+            	RequestOptions.username = _und.findWhere(Globals.envJson.values, {key:'NTLM_USERNAME'}).value;
+				RequestOptions.password = _und.findWhere(Globals.envJson.values, {key:'NTLM_PASSWORD'}).value;
+				RequestOptions.workstation = 'workstation.test';
+				var unireq = requestLibNtlm[RequestOptions.method.toLowerCase()](RequestOptions, dealWithResponse.bind(this));
+			}
+			else
+			{
+            	var unireq = requestLib(RequestOptions, dealWithResponse.bind(this));
+			}
 
 			this._setFormDataIfParamsInRequest(unireq, request);
 			//To be uncommented if each prScript/test should set transient env. vars
